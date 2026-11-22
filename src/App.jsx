@@ -7,22 +7,32 @@ import JobDetail from "./pages/JobDetail";
 import LearningPath from "./pages/LearningPath";
 import MockTest from "./pages/MockTest";
 import ResumeUpload from "./pages/ResumeUpload";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Profile from "./pages/Profile";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { ToastProvider } from "./context/ToastContext";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/jobs" element={<Jobs />} />
-        <Route path="/jobs/:id" element={<JobDetail />} />
-        <Route path="/learn/:skill?" element={<LearningPath />} />
-        <Route path="/mock/:jobId" element={<MockTest />} />
-        <Route path="/resume" element={<ResumeUpload />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-      <footer className="text-center text-xs text-slate-400 py-6">PlaceLocal.AI • SSTC Bhilai Demo • Yash Gupta • All data mocked, Chhattisgarh-specific</footer>
-    </BrowserRouter>
+    <ToastProvider>
+      <BrowserRouter>
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/jobs/:id" element={<JobDetail />} />
+          <Route path="/learn/:skill?" element={<ProtectedRoute><LearningPath /></ProtectedRoute>} />
+          <Route path="/mock/:jobId" element={<ProtectedRoute><MockTest /></ProtectedRoute>} />
+          <Route path="/resume" element={<ProtectedRoute><ResumeUpload /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+        <footer className="text-center text-xs text-slate-400 py-6">PlaceLocal.AI • SSTC Bhilai • Local student profiles • Chhattisgarh placements</footer>
+      </BrowserRouter>
+    </ToastProvider>
   );
 }

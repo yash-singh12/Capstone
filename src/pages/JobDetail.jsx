@@ -2,23 +2,32 @@ import { useParams, Link } from "react-router-dom";
 import { JOBS, getGap } from "../data/mockData";
 import MatchRing from "../components/MatchRing";
 import { MapPin, Bus, ArrowRight } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { formatCurrency, formatDistance } from "../utils/formatters";
 
 export default function JobDetail() {
+  const { user } = useAuth();
   const { id } = useParams();
   const job = JOBS.find(j => j.id === id) || JOBS[0];
-  const gap = getGap(job.id);
+  const gap = getGap(job.id, user?.skills || []);
+  const priorityWeight = { High: 0, Medium: 1, Low: 2 };
+  const highestPriorityMissing = [...gap.missing].sort((a, b) => (priorityWeight[a.importance] ?? 3) - (priorityWeight[b.importance] ?? 3))[0]?.skill;
+  const learningSkill = ["TypeScript", "SQL", "React", "Node.js", "Java", "Docker", "Redis", "Figma"].includes(highestPriorityMissing)
+    ? highestPriorityMissing
+    : "TypeScript";
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 grid md:grid-cols-3 gap-4">
       <div className="md:col-span-2 card p-6">
         <span className="chip bg-slate-100">{job.tag}</span>
         <h1 className="text-2xl font-extrabold mt-1">{job.title} @ {job.company}</h1>
-        <p className="text-sm text-slate-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {job.address} • {job.distanceKm}km • {job.commuteMin}min</p>
+        <p className="text-sm text-slate-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {job.address} • {formatDistance(job.distanceKm, job.commuteMin)}</p>
         <p className="text-xs text-slate-500 flex items-center gap-1"><Bus size={13}/> {job.busRoute}</p>
         <p className="text-sm mt-3">{job.desc}</p>
+        <p className="mt-3 font-semibold text-indigo-700">{formatCurrency(job.salary)}</p>
         <p className="font-bold mt-4">Required skills</p>
         <div className="flex flex-wrap gap-1 mt-1">{job.required.map(s => <span key={s} className="chip bg-slate-100">{s}</span>)}</div>
         <div className="flex gap-2 mt-5 flex-wrap">
-          <Link to={`/learn/TypeScript`} className="btn-primary text-sm">Start Upskilling Path <ArrowRight size={14} className="inline"/></Link>
+          <Link to={`/learn/${learningSkill}`} className="btn-primary text-sm">Start {learningSkill} Upskilling <ArrowRight size={14} className="inline"/></Link>
           <Link to={`/mock/${job.id}`} className="btn-ghost text-sm">Take Job-Tailored Mock</Link>
         </div>
       </div>

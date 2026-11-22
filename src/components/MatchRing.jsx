@@ -1,6 +1,8 @@
+import { matchHex } from "../utils/formatters";
+
 export default function MatchRing({ value, size = 110 }) {
   const r = 45, c = 2 * Math.PI * r;
-  const col = value >= 80 ? "#16a34a" : value >= 60 ? "#d97706" : "#dc2626";
+  const col = matchHex(value);
   return (
     <svg width={size} height={size} viewBox="0 0 110 110">
       <circle cx="55" cy="55" r={r} fill="none" stroke="#e2e8f0" strokeWidth="10"/>

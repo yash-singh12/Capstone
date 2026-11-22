@@ -1,3 +1,5 @@
+@import "leaflet/dist/leaflet.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,3 +10,8 @@ body { @apply bg-slate-50 text-slate-800; font-family: Inter, system-ui, sans-se
 .btn-ghost { @apply bg-white border border-slate-300 hover:bg-slate-100 px-4 py-2 rounded-xl text-sm font-medium transition; }
 .chip { @apply text-xs font-medium px-2.5 py-1 rounded-full; }
 input[type="range"] { @apply w-full accent-indigo-600; }
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(-8px) translateX(8px); }
+  to { opacity: 1; transform: translateY(0) translateX(0); }
+}
