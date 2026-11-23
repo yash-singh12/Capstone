@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pydantic[email]
+pyjwt
+passlib
+bcrypt<5.0
+pypdf
+python-multipart
+numpy
+sentence-transformers

@@ -28,3 +28,8 @@ dist-ssr
 .env.*
 !.env.example
 
+# Local Python and model artifacts
+backend/.model-cache/
+backend/__pycache__/
+backend/**/__pycache__/
+
