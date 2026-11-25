@@ -31,5 +31,20 @@ def database_connection(database_path: str | Path = DATABASE_PATH) -> Iterator[s
 
 def initialize_database(database_path: str | Path = DATABASE_PATH) -> None:
     """Create the schema if it does not already exist."""
-    with get_connection(database_path) as connection:
+    with database_connection(database_path) as connection:
         connection.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        student_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(students)")
+        }
+        if "resume_filename" not in student_columns:
+            connection.execute("ALTER TABLE students ADD COLUMN resume_filename TEXT")
+        if "resume_data" not in student_columns:
+            connection.execute("ALTER TABLE students ADD COLUMN resume_data BLOB")
+
+        job_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(jobs)")
+        }
+        if "employer_id" not in job_columns:
+            connection.execute(
+                "ALTER TABLE jobs ADD COLUMN employer_id TEXT REFERENCES users(id) ON DELETE CASCADE"
+            )

@@ -3,18 +3,41 @@ import { useParams, Link } from "react-router-dom";
 import { MOCK_BY_JOB, JOBS } from "../data/mockData";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { apiRequest } from "../utils/api";
 
 export default function MockTest() {
   const { user, submitMock, addApplication } = useAuth();
   const toast = useToast();
   const { jobId } = useParams();
   const mock = MOCK_BY_JOB[jobId] || MOCK_BY_JOB["pixelkraft-fe"];
-  const job = JOBS.find((item) => item.id === jobId);
+  const staticJob = JOBS.find((item) => item.id === jobId);
+  const [serverJob, setServerJob] = useState(null);
+  const [jobLoadError, setJobLoadError] = useState("");
+  useEffect(() => {
+    if (staticJob) return undefined;
+    let active = true;
+    apiRequest(`/api/jobs/${encodeURIComponent(jobId)}`)
+      .then((jobData) => {
+        if (active) {
+          setServerJob(jobData);
+          setJobLoadError("");
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setServerJob(null);
+          setJobLoadError(error.message || "Unable to load this job.");
+        }
+      });
+    return () => { active = false; };
+  }, [jobId, staticJob]);
+  const job = staticJob || (serverJob?.id === jobId ? serverJob : null);
   const application = user?.applications?.find((item) => item.jobId === (job?.id || jobId));
   const [answers, setAnswers] = useState({});
   const [done, setDone] = useState(false);
   const [behavioral, setBehavioral] = useState("");
   const [showModelAnswer, setShowModelAnswer] = useState(false);
+  const [submittingApplication, setSubmittingApplication] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15 * 60);
   const submittedRef = useRef(false);
 
@@ -64,6 +87,7 @@ export default function MockTest() {
     return (
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="card p-8 text-center">
+          {jobLoadError && <p role="status" className="mb-3 text-sm text-amber-700">{jobLoadError}</p>}
           <div className="text-5xl font-extrabold text-indigo-700">{score}/{mock.mcqs.length}</div>
           <div className="font-bold mt-1">MCQ Result</div>
           <div className="bg-slate-100 rounded-xl h-3 mt-4">
@@ -77,15 +101,29 @@ export default function MockTest() {
               <Link to="/applications" className="btn-primary text-sm">Application submitted · Track status</Link>
             ) : (
               <button
-                className="btn-primary text-sm"
-                onClick={() => {
+                className="btn-primary text-sm disabled:cursor-wait disabled:opacity-60"
+                disabled={submittingApplication}
+                onClick={async () => {
+                  setSubmittingApplication(true);
                   const company = job?.company || "Employer";
-                  const submitted = addApplication(job?.id || jobId, company, job?.title || mock.title, percentage);
-                  if (submitted) toast.success(`Application sent to ${company}.`);
-                  else toast.info("You have already applied for this job.");
+                  try {
+                    const submitted = await addApplication(
+                      job?.id || jobId,
+                      company,
+                      job?.title || mock.title,
+                      percentage,
+                      { score, total: mock.mcqs.length }
+                    );
+                    if (submitted) toast.success(`Application sent to ${company}.`);
+                    else toast.info("You have already applied for this job.");
+                  } catch (error) {
+                    toast.error(error.message || "Unable to submit your application.");
+                  } finally {
+                    setSubmittingApplication(false);
+                  }
                 }}
               >
-                Submit Application
+                {submittingApplication ? "Submitting…" : "Submit Application"}
               </button>
             )}
             {!ready && (
@@ -119,6 +157,7 @@ export default function MockTest() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="card p-5">
+        {jobLoadError && <p role="status" className="mb-3 text-sm text-amber-700">{jobLoadError}</p>}
         <div className="flex justify-between">
           <b>{mock.title}</b>
           <span className={`chip ${timeLeft < 60 ? "bg-red-600 text-white" : "bg-slate-900 text-white"}`}>

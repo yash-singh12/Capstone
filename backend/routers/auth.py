@@ -92,37 +92,38 @@ def register(payload: RegisterRequest) -> AuthResponse:
             2,
         )
 
-        connection.execute(
-            """
-            INSERT INTO students
-                (user_id, name, branch, roll_no, cgpa, home_address,
-                 latitude, longitude, commute_mode, employability_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                payload.name,
-                payload.branch,
-                payload.roll,
-                payload.cgpa,
-                payload.home,
-                payload.latitude,
-                payload.longitude,
-                payload.commute,
-                employability_score,
-            ),
-        )
+        if payload.role == "student":
+            connection.execute(
+                """
+                INSERT INTO students
+                    (user_id, name, branch, roll_no, cgpa, home_address,
+                     latitude, longitude, commute_mode, employability_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    payload.name,
+                    payload.branch,
+                    payload.roll,
+                    payload.cgpa,
+                    payload.home,
+                    payload.latitude,
+                    payload.longitude,
+                    payload.commute,
+                    employability_score,
+                ),
+            )
 
-        for skill_name in payload.skills:
-            skill = connection.execute(
-                "SELECT id FROM skills WHERE name = ?",
-                (skill_name,),
-            ).fetchone()
-            if skill:
-                connection.execute(
-                    "INSERT OR IGNORE INTO student_skills (student_id, skill_id) VALUES (?, ?)",
-                    (user_id, skill["id"]),
-                )
+            for skill_name in payload.skills:
+                skill = connection.execute(
+                    "SELECT id FROM skills WHERE name = ?",
+                    (skill_name,),
+                ).fetchone()
+                if skill:
+                    connection.execute(
+                        "INSERT OR IGNORE INTO student_skills (student_id, skill_id) VALUES (?, ?)",
+                        (user_id, skill["id"]),
+                    )
 
         connection.commit()
 

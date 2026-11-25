@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BriefcaseBusiness, CalendarDays, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { JOBS } from "../data/mockData";
+import { apiRequest } from "../utils/api";
 
 const PIPELINE = ["Applied", "Under Review", "Interview Scheduled", "Selected / Offer"];
 const STATUS_INDEX = {
@@ -30,9 +32,47 @@ function formatAppliedDate(date) {
 
 export default function ApplicationTracker() {
   const { user } = useAuth();
+  const [serverApplications, setServerApplications] = useState([]);
+  const [syncError, setSyncError] = useState("");
   const applications = Array.isArray(user?.applications) ? user.applications : [];
   const mockHistory = Array.isArray(user?.mockHistory) ? user.mockHistory : [];
-  const sortedApplications = [...applications].sort(
+  useEffect(() => {
+    let active = true;
+    const refreshApplications = async () => {
+      try {
+        const result = await apiRequest(`/api/applications/student/${encodeURIComponent(user.id)}`);
+        if (!active) return;
+        setServerApplications(result.map((application) => ({
+          jobId: application.job_id,
+          jobTitle: application.title,
+          company: application.company,
+          appliedAt: application.applied_at,
+          readinessScore: application.readiness_score,
+          mockScore: application.mock_score,
+          mockTotal: application.mock_total,
+          status: application.status,
+        })));
+        setSyncError("");
+      } catch (error) {
+        if (active) setSyncError(error.message || "Unable to refresh application statuses.");
+      }
+    };
+    refreshApplications();
+    const timer = window.setInterval(refreshApplications, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [user.id]);
+
+  const applicationsByJob = new Map(applications.map((application) => [application.jobId, application]));
+  serverApplications.forEach((application) => {
+    applicationsByJob.set(application.jobId, {
+      ...applicationsByJob.get(application.jobId),
+      ...application,
+    });
+  });
+  const sortedApplications = [...applicationsByJob.values()].sort(
     (first, second) => new Date(second.appliedAt).getTime() - new Date(first.appliedAt).getTime()
   );
 
@@ -42,6 +82,7 @@ export default function ApplicationTracker() {
         <p className="text-sm font-semibold text-indigo-700">Your job search</p>
         <h1 className="text-2xl font-extrabold text-slate-900">Application Tracker</h1>
         <p className="mt-1 text-sm text-slate-600">Follow each application from submission through offer.</p>
+        {syncError && <p role="status" className="mt-2 text-sm text-amber-700">Live status refresh unavailable: {syncError}</p>}
       </div>
 
       {sortedApplications.length ? (
@@ -50,8 +91,11 @@ export default function ApplicationTracker() {
             const job = JOBS.find((item) => item.id === application.jobId);
             const mock = mockHistory.find((item) => item.jobId === application.jobId);
             const statusIndex = getStatusIndex(application.status);
-            const status = PIPELINE[statusIndex];
+            const rejected = String(application.status).toLowerCase() === "rejected";
+            const status = rejected ? "Rejected" : PIPELINE[statusIndex];
             const score = application.readinessScore ?? mock?.percentage;
+            const mockScore = application.mockScore ?? mock?.score;
+            const mockTotal = application.mockTotal ?? mock?.total;
 
             return (
               <article key={application.jobId} className="card p-5">
@@ -62,7 +106,7 @@ export default function ApplicationTracker() {
                     </Link>
                     <p className="text-sm text-slate-600">{application.company || job?.company || "Company unavailable"}</p>
                   </div>
-                  <span className="chip w-fit bg-indigo-100 text-indigo-700">{status}</span>
+                  <span className={`chip w-fit ${rejected ? "bg-red-100 text-red-700" : "bg-indigo-100 text-indigo-700"}`}>{status}</span>
                 </div>
 
                 <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
@@ -72,11 +116,11 @@ export default function ApplicationTracker() {
                   </p>
                   <p className="flex items-center gap-2">
                     <ClipboardCheck size={16} className="text-slate-400" />
-                    Mock test score: {score == null ? "Not available" : `${mock ? `${mock.score}/${mock.total} · ` : ""}${score}%`}
+                    Mock test score: {score == null ? "Not available" : `${mockScore != null && mockTotal ? `${mockScore}/${mockTotal} · ` : ""}${score}%`}
                   </p>
                 </div>
 
-                <ol aria-label={`Application status: ${status}`} className="mt-5 grid grid-cols-4 gap-2">
+                {!rejected && <ol aria-label={`Application status: ${status}`} className="mt-5 grid grid-cols-4 gap-2">
                   {PIPELINE.map((step, index) => (
                     <li key={step} className="min-w-0">
                       <div className={`mb-2 h-1.5 rounded-full ${index <= statusIndex ? "bg-indigo-600" : "bg-slate-200"}`} />
@@ -85,7 +129,7 @@ export default function ApplicationTracker() {
                       </span>
                     </li>
                   ))}
-                </ol>
+                </ol>}
               </article>
             );
           })}

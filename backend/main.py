@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import initialize_database
-from .routers import applications, auth, jobs, students
+from .routers import applications, auth, employers, jobs, students
 
 
 initialize_database()
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
+app.include_router(employers.router)
 app.include_router(students.router)
 
 

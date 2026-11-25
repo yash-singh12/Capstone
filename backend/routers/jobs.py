@@ -38,8 +38,18 @@ def list_jobs(
             ORDER BY title
             """
         ).fetchall()
+        skill_rows = connection.execute(
+            """
+            SELECT js.job_id, s.name
+            FROM job_skills js
+            JOIN skills s ON s.id = js.skill_id
+            """
+        ).fetchall()
 
     query = q.strip().lower() if q else None
+    required_by_job = {}
+    for skill_row in skill_rows:
+        required_by_job.setdefault(skill_row["job_id"], []).append(skill_row["name"])
     result = []
     for row in rows:
         if row["latitude"] is None or row["longitude"] is None:
@@ -81,12 +91,67 @@ def list_jobs(
             "busRoute": row["bus_route"],
             "bus_route": row["bus_route"],
             "desc": row["desc"],
+            "required": required_by_job.get(row["id"], []),
             "distance_km": round(distance, 1),
             "commute_min": estimate_commute_minutes(distance),
         })
 
     result.sort(key=lambda job: job["distance_km"])
     return result
+
+
+@router.get("/{job_id}")
+def get_job(job_id: str) -> dict:
+    with database_connection() as connection:
+        job = connection.execute(
+            """
+            SELECT id, title, company, tag, address, latitude, longitude,
+                   salary, bus_route, desc
+            FROM jobs
+            WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        required = connection.execute(
+            """
+            SELECT s.name
+            FROM job_skills js
+            JOIN skills s ON s.id = js.skill_id
+            WHERE js.job_id = ?
+            ORDER BY s.name
+            """,
+            (job_id,),
+        ).fetchall()
+
+    distance = haversine_km(
+        SSTC_LOCATION[0],
+        SSTC_LOCATION[1],
+        float(job["latitude"]),
+        float(job["longitude"]),
+    )
+    commute = estimate_commute_minutes(distance)
+    return {
+        "id": job["id"],
+        "title": job["title"],
+        "company": job["company"],
+        "tag": job["tag"],
+        "address": job["address"],
+        "latitude": job["latitude"],
+        "longitude": job["longitude"],
+        "lat": job["latitude"],
+        "lng": job["longitude"],
+        "salary": job["salary"],
+        "bus_route": job["bus_route"],
+        "busRoute": job["bus_route"],
+        "desc": job["desc"],
+        "distance_km": round(distance, 1),
+        "distanceKm": round(distance, 1),
+        "commute_min": commute,
+        "commuteMin": commute,
+        "required": [row["name"] for row in required],
+    }
 
 
 @router.get("/{job_id}/gap")

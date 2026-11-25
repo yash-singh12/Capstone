@@ -342,8 +342,8 @@ export const MOCK_BY_JOB = {
   },
 };
 
-export function getGap(jobId, skills = []) {
-  const j = JOBS.find((x) => x.id === jobId);
+export function getGap(jobId, skills = [], jobOverride = null) {
+  const j = jobOverride || JOBS.find((x) => x.id === jobId);
   if (!j) return { matchPercent: 0, matched: [], missing: [], semanticNote: "No matching job found." };
   if (GAP_BY_JOB[jobId] && skills.length === 0) return GAP_BY_JOB[jobId];
   const matched = j.required.filter((s) => skills.includes(s));

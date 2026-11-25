@@ -11,8 +11,10 @@ export default function Register() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: "", email: "", password: "", role: "student",
+    companyName: "",
     college: "Shri Shankaracharya Technical Campus (SSTC), Bhilai",
     branch: "", semester: "", roll: "", cgpa: "", home: "", commute: "", skills: [],
   });
@@ -20,15 +22,18 @@ export default function Register() {
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const toggleSkill = (skill) => set("skills", form.skills.includes(skill) ? form.skills.filter((item) => item !== skill) : [...form.skills, skill]);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
-      register({ ...form, branch: form.semester ? `${form.branch}, ${form.semester} Sem` : form.branch });
+      const account = await register({ ...form, branch: form.semester ? `${form.branch}, ${form.semester} Sem` : form.branch });
       toast.success("Account created successfully.");
-      navigate("/dashboard", { replace: true });
+      navigate(account.role === "employer" ? "/employer/dashboard" : "/dashboard", { replace: true });
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Unable to create the account. Check the local backend and try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -46,7 +51,11 @@ export default function Register() {
           <label className="text-sm font-medium">Password<input required minLength={6} type="password" value={form.password} onChange={(e) => set("password", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" /></label>
           <label className="text-sm font-medium">Role<select value={form.role} onChange={(e) => set("role", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5"><option value="student">Student</option><option value="employer">Employer</option></select></label>
         </div>}
-        {step === 2 && <div className="grid md:grid-cols-2 gap-4 mt-6">
+        {step === 2 && form.role === "employer" && <div className="mt-6">
+          <label className="block text-sm font-medium">Company name<input required value={form.companyName} onChange={(e) => set("companyName", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" placeholder="Your local business" /></label>
+          <p className="mt-2 text-xs text-slate-500">You can add your Bhilai–Durg–Raipur openings after signing in.</p>
+        </div>}
+        {step === 2 && form.role === "student" && <div className="grid md:grid-cols-2 gap-4 mt-6">
           <label className="text-sm font-medium md:col-span-2">College<input required value={form.college} onChange={(e) => set("college", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" /></label>
           <label className="text-sm font-medium">Branch / Course<input required value={form.branch} onChange={(e) => set("branch", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" placeholder="B.Tech CSE" /></label>
           <label className="text-sm font-medium">Semester<input value={form.semester} onChange={(e) => set("semester", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" placeholder="7th" /></label>
@@ -55,13 +64,16 @@ export default function Register() {
           <label className="text-sm font-medium">Residential area<input value={form.home} onChange={(e) => set("home", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" /></label>
           <label className="text-sm font-medium">Commute status<input value={form.commute} onChange={(e) => set("commute", e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2.5" placeholder="Day-scholar • 4.5 km" /></label>
         </div>}
-        {step === 3 && <div className="mt-6">
+        {step === 3 && form.role === "student" && <div className="mt-6">
           <p className="text-sm font-medium mb-3">Select your skills</p>
           <div className="flex flex-wrap gap-2">{SKILLS.map((skill) => <button type="button" key={skill} onClick={() => toggleSkill(skill)} className={`px-3 py-2 rounded-full text-sm border ${form.skills.includes(skill) ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-300"}`}>{skill}</button>)}</div>
         </div>}
+        {step === 3 && form.role === "employer" && <div className="card mt-6 bg-indigo-50 p-4 text-sm text-indigo-800">
+          Your employer account is ready to create job postings and review applicants.
+        </div>}
         <div className="flex items-center justify-between mt-8">
           {step > 1 ? <button type="button" onClick={() => setStep(step - 1)} className="btn-ghost">Back</button> : <Link to="/login" className="text-sm text-indigo-600 font-semibold">Back to login</Link>}
-          {step < 3 ? <button type="button" onClick={() => setStep(step + 1)} className="btn-primary">Continue</button> : <button type="submit" className="btn-primary">Create account</button>}
+          {step < 3 ? <button type="button" onClick={() => setStep(step + 1)} className="btn-primary">Continue</button> : <button type="submit" disabled={submitting} className="btn-primary disabled:opacity-60">{submitting ? "Creating account…" : "Create account"}</button>}
         </div>
       </form>
     </div>

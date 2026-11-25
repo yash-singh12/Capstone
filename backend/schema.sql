@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS students (
     longitude REAL,
     commute_mode TEXT,
     employability_score REAL,
+    resume_filename TEXT,
+    resume_data BLOB,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -45,7 +47,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     longitude REAL,
     salary TEXT,
     bus_route TEXT,
-    desc TEXT
+    desc TEXT,
+    employer_id TEXT REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS job_skills (

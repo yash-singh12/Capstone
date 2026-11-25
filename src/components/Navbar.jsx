@@ -9,13 +9,15 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const links = [
-    ["Dashboard", "/dashboard"],
-    ["Jobs", "/jobs"],
-    ["Applications", "/applications"],
-    ["Upskilling", "/learn/TypeScript"],
-    ["Mock Test", "/mock/pixelkraft-fe"],
-  ];
+  const links = user?.role === "employer"
+    ? [["Employer Dashboard", "/employer/dashboard"], ["Post a Job", "/employer/post-job"]]
+    : [
+      ["Dashboard", "/dashboard"],
+      ["Jobs", "/jobs"],
+      ["Applications", "/applications"],
+      ["Upskilling", "/learn/TypeScript"],
+      ["Mock Test", "/mock/pixelkraft-fe"],
+    ];
   const initials = user?.name?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "ST";
   const signOut = () => {
     logout();
@@ -44,7 +46,7 @@ export default function Navbar() {
           )}
         </div>
         <div className="ml-auto md:ml-0">
-          <NotificationBell />
+          {user?.role !== "employer" && <NotificationBell />}
         </div>
         <button type="button" onClick={() => setMenuOpen((open) => !open)} className="ml-0 grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 md:hidden" aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}>
           {menuOpen ? <X size={21} /> : <Menu size={21} />}

@@ -59,6 +59,14 @@ async def upload_resume(
                     (student_id, skill["id"]),
                 )
 
+        connection.execute(
+            """
+            UPDATE students
+            SET resume_filename = ?, resume_data = ?
+            WHERE user_id = ?
+            """,
+            (file.filename, pdf_bytes, student_id),
+        )
         connection.commit()
 
     return {

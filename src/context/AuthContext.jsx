@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { apiRequest } from "../utils/api";
 
 const AuthContext = createContext(null);
 
@@ -60,6 +61,22 @@ function ensureHistory(account, key) {
   return Array.isArray(account?.[key]) ? account[key] : HISTORY_DEFAULTS[key] || [];
 }
 
+function backendRegistrationPayload(account) {
+  const isStudent = account.role === "student";
+  return {
+    name: account.name,
+    email: account.email,
+    password: account.password,
+    role: account.role,
+    branch: isStudent ? account.branch : null,
+    roll: isStudent ? account.roll : null,
+    cgpa: isStudent ? Number(account.cgpa || 0) : null,
+    home: isStudent ? account.home : null,
+    commute: isStudent ? account.commute : null,
+    skills: isStudent ? account.skills || [] : [],
+  };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
@@ -75,15 +92,19 @@ export function AuthProvider({ children }) {
     if (user) localStorage.setItem(SESSION_KEY, user.id);
   }, [user]);
 
-  const register = (registration) => {
+  const register = async (registration) => {
     const users = readUsers();
     if (users.some((item) => item.email.toLowerCase() === registration.email.toLowerCase())) {
       throw new Error("An account with this email already exists.");
     }
+    const backendUser = await apiRequest("/api/auth/register", {
+      method: "POST",
+      body: backendRegistrationPayload(registration),
+    });
     const employability = calculateEmployability(registration);
     const account = {
       ...registration,
-      id: createId(),
+      id: backendUser.user_id,
       college: registration.college || DEFAULT_COLLEGE,
       cgpa: Number(registration.cgpa || 0),
       skills: registration.skills || [],
@@ -97,34 +118,78 @@ export function AuthProvider({ children }) {
     return publicUser(account);
   };
 
-  const login = (email, password) => {
-    const account = readUsers().find(
+  const login = async (email, password) => {
+    const users = readUsers();
+    const savedAccount = users.find(
       (item) => item.email.toLowerCase() === email.trim().toLowerCase()
     );
-    if (!account || account.password !== password) throw new Error("Invalid email or password.");
+    if (!savedAccount || savedAccount.password !== password) throw new Error("Invalid email or password.");
+    let backendUser;
+    try {
+      backendUser = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: { email: savedAccount.email, password },
+      });
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      backendUser = await apiRequest("/api/auth/register", {
+        method: "POST",
+        body: backendRegistrationPayload(savedAccount),
+      });
+    }
+    if (backendUser.role !== savedAccount.role) {
+      throw new Error("The account role does not match the local profile. Contact your administrator.");
+    }
+    const account = { ...savedAccount, id: backendUser.user_id };
     account.activity = ensureHistory(account, "activity");
     account.activity = [{ id: createId(), message: `Logged in as ${account.name}`, type: "info", createdAt: new Date().toISOString() }, ...account.activity].slice(0, 10);
-    localStorage.setItem(USERS_KEY, JSON.stringify(readUsers().map((item) => item.id === account.id ? account : item)));
+    localStorage.setItem(USERS_KEY, JSON.stringify(users.map((item) => item.id === savedAccount.id ? account : item)));
     localStorage.setItem(SESSION_KEY, account.id);
     setUser(publicUser(account));
     return publicUser(account);
   };
 
-  const quickDemoLogin = () => {
-    const users = readUsers();
-    let account = users.find((item) => item.email === DEMO_PROFILE.email);
-    if (!account) {
-      account = {
-        ...DEMO_PROFILE,
-        id: createId(),
-        employability: calculateEmployability(DEMO_PROFILE),
-        ...HISTORY_DEFAULTS,
-      };
-      localStorage.setItem(USERS_KEY, JSON.stringify([...users, account]));
+  const quickDemoLogin = async () => {
+    let backendUser;
+    try {
+      backendUser = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: { email: DEMO_PROFILE.email, password: DEMO_PROFILE.password },
+      });
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      backendUser = await apiRequest("/api/auth/register", {
+        method: "POST",
+        body: {
+          name: DEMO_PROFILE.name,
+          email: DEMO_PROFILE.email,
+          password: DEMO_PROFILE.password,
+          role: DEMO_PROFILE.role,
+          branch: DEMO_PROFILE.branch,
+          roll: DEMO_PROFILE.roll,
+          cgpa: DEMO_PROFILE.cgpa,
+          home: DEMO_PROFILE.home,
+          commute: DEMO_PROFILE.commute,
+          skills: DEMO_PROFILE.skills,
+        },
+      });
     }
+
+    const users = readUsers();
+    const savedAccount = users.find((item) => item.email === DEMO_PROFILE.email);
+    const account = {
+      ...DEMO_PROFILE,
+      ...HISTORY_DEFAULTS,
+      ...(savedAccount || {}),
+      id: backendUser.user_id,
+      employability: savedAccount?.employability ?? calculateEmployability(DEMO_PROFILE),
+    };
     account.activity = ensureHistory(account, "activity");
     account.activity = [{ id: createId(), message: `Logged in as ${account.name}`, type: "info", createdAt: new Date().toISOString() }, ...account.activity].slice(0, 10);
-    localStorage.setItem(USERS_KEY, JSON.stringify(readUsers().map((item) => item.id === account.id ? account : item)));
+    const updatedUsers = users.some((item) => item.email === account.email)
+      ? users.map((item) => item.email === account.email ? account : item)
+      : [...users, account];
+    localStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
     localStorage.setItem(SESSION_KEY, account.id);
     setUser(publicUser(account));
     return publicUser(account);
@@ -216,7 +281,7 @@ export function AuthProvider({ children }) {
     setUser(publicUser(merged));
   };
 
-  const addApplication = (jobId, company, jobTitle, readinessScore) => {
+  const addApplication = async (jobId, company, jobTitle, readinessScore, mockDetails = {}) => {
     if (!user) return false;
     const users = readUsers();
     const account = users.find((item) => item.id === user.id);
@@ -228,6 +293,19 @@ export function AuthProvider({ children }) {
     const now = new Date().toISOString();
     const mockAttempt = ensureHistory(account, "mockHistory").find((item) => item.jobId === jobId);
     const score = readinessScore ?? mockAttempt?.percentage ?? null;
+    const mockScore = mockDetails.score ?? mockAttempt?.score;
+    const mockTotal = mockDetails.total ?? mockAttempt?.total;
+    await apiRequest("/api/applications", {
+      method: "POST",
+      body: {
+        student_id: user.id,
+        job_id: jobId,
+        readiness_score: score,
+        ...(mockScore !== undefined && mockTotal !== undefined
+          ? { mock_score: mockScore, mock_total: mockTotal }
+          : {}),
+      },
+    });
     const application = {
       jobId,
       company,

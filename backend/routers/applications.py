@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -16,14 +17,22 @@ class ApplicationRequest(BaseModel):
     student_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
     readiness_score: float | None = Field(default=None, ge=0, le=100)
+    mock_score: int | None = Field(default=None, ge=0)
+    mock_total: int | None = Field(default=None, ge=1)
 
 
 class StatusRequest(BaseModel):
-    status: str = Field(min_length=1)
+    status: Literal["under_review", "interview_scheduled", "selected", "rejected"]
+    employer_id: str = Field(min_length=1)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def submit_application(payload: ApplicationRequest) -> dict:
+    if (payload.mock_score is None) != (payload.mock_total is None):
+        raise HTTPException(status_code=422, detail="Mock score and total must be provided together")
+    if payload.mock_score is not None and payload.mock_score > payload.mock_total:
+        raise HTTPException(status_code=422, detail="Mock score cannot exceed the total")
+
     application_id = str(uuid.uuid4())
     applied_at = datetime.now(timezone.utc).isoformat()
 
@@ -67,6 +76,21 @@ def submit_application(payload: ApplicationRequest) -> dict:
                 applied_at,
             ),
         )
+        if payload.mock_score is not None:
+            connection.execute(
+                """
+                INSERT INTO mock_attempts (id, student_id, job_id, score, total, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    payload.student_id,
+                    payload.job_id,
+                    payload.mock_score,
+                    payload.mock_total,
+                    applied_at,
+                ),
+            )
         connection.commit()
 
     return {
@@ -86,11 +110,16 @@ def list_student_applications(student_id: str) -> list[dict]:
             """
             SELECT a.id, a.student_id, a.job_id, a.status,
                    a.readiness_score, a.applied_at,
-                   j.title, j.company, j.tag, j.address, j.salary
+                   j.title, j.company, j.tag, j.address, j.salary,
+                   (SELECT m.score FROM mock_attempts m
+                    WHERE m.student_id = a.student_id AND m.job_id = a.job_id
+                    ORDER BY m.completed_at DESC LIMIT 1) AS mock_score,
+                   (SELECT m.total FROM mock_attempts m
+                    WHERE m.student_id = a.student_id AND m.job_id = a.job_id
+                    ORDER BY m.completed_at DESC LIMIT 1) AS mock_total
             FROM applications a
             JOIN jobs j ON j.id = a.job_id
             WHERE a.student_id = ?
-              AND lower(a.status) NOT IN ('rejected', 'withdrawn')
             ORDER BY a.applied_at DESC
             """,
             (student_id,),
@@ -103,11 +132,24 @@ def list_student_applications(student_id: str) -> list[dict]:
 def update_application_status(application_id: str, payload: StatusRequest) -> dict:
     with database_connection() as connection:
         application = connection.execute(
-            "SELECT id, status FROM applications WHERE id = ?",
+            """
+            SELECT a.id, a.status, j.employer_id
+            FROM applications a
+            JOIN jobs j ON j.id = a.job_id
+            WHERE a.id = ?
+            """,
             (application_id,),
         ).fetchone()
         if not application:
             raise HTTPException(status_code=404, detail="Application not found")
+        employer = connection.execute(
+            "SELECT role FROM users WHERE id = ?",
+            (payload.employer_id,),
+        ).fetchone()
+        if not employer or employer["role"] != "employer":
+            raise HTTPException(status_code=403, detail="Employer access required")
+        if application["employer_id"] != payload.employer_id:
+            raise HTTPException(status_code=403, detail="This application does not belong to your job posting")
 
         connection.execute(
             "UPDATE applications SET status = ? WHERE id = ?",

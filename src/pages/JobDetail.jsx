@@ -1,16 +1,48 @@
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { JOBS, getGap } from "../data/mockData";
 import MatchRing from "../components/MatchRing";
 import { MapPin, Bus, ArrowRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { formatCurrency, formatDistance } from "../utils/formatters";
+import { apiRequest } from "../utils/api";
 
 export default function JobDetail() {
   const { user } = useAuth();
   const { id } = useParams();
-  const job = JOBS.find(j => j.id === id) || JOBS[0];
+  const staticJob = JOBS.find((item) => item.id === id);
+  const [serverJob, setServerJob] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (staticJob) return undefined;
+    let active = true;
+    apiRequest(`/api/jobs/${encodeURIComponent(id)}`)
+      .then((jobData) => {
+        if (active) setServerJob({
+          ...jobData,
+          distanceKm: jobData.distance_km,
+          commuteMin: jobData.commute_min,
+          busRoute: jobData.busRoute || jobData.bus_route,
+        });
+      })
+      .catch((error) => {
+        if (active) setLoadError(error.message || "Unable to load this job.");
+      });
+    return () => { active = false; };
+  }, [id, staticJob]);
+  const job = staticJob || (serverJob?.id === id ? serverJob : null);
+  if (!job) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        <div className="card p-6 text-center">
+          <p className="text-sm text-slate-600">{loadError || "Loading job details…"}</p>
+          <Link to="/jobs" className="btn-ghost mt-4 inline-block">Back to jobs</Link>
+        </div>
+      </main>
+    );
+  }
   const application = user?.applications?.find((item) => item.jobId === job.id);
-  const gap = getGap(job.id, user?.skills || []);
+  const gap = getGap(job.id, user?.skills || [], job);
   const priorityWeight = { High: 0, Medium: 1, Low: 2 };
   const highestPriorityMissing = [...gap.missing].sort((a, b) => (priorityWeight[a.importance] ?? 3) - (priorityWeight[b.importance] ?? 3))[0]?.skill;
   const learningSkill = ["TypeScript", "SQL", "React", "Node.js", "Java", "Docker", "Redis", "Figma"].includes(highestPriorityMissing)

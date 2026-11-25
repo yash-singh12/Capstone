@@ -11,17 +11,21 @@ export default function Login() {
   const location = useLocation();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
-      login(form.email, form.password);
+      const account = await login(form.email, form.password);
       toast.success("Login successful. Welcome back!");
-      navigate(location.state?.from || "/dashboard", { replace: true });
+      navigate(account.role === "employer" ? "/employer/dashboard" : location.state?.from || "/dashboard", { replace: true });
     } catch (err) {
-      toast.error("Login failed. Check your email and password.");
-      setError(err.message);
+      toast.error("Login failed.");
+      setError(err.message || "Unable to sign in. Check your credentials and local backend.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -29,10 +33,15 @@ export default function Login() {
     setForm({ email: DEMO_PROFILE.email, password: DEMO_PROFILE.password });
   };
 
-  const demoLogin = () => {
-    quickDemoLogin();
-    toast.success("Demo profile loaded successfully.");
-    navigate(location.state?.from || "/dashboard", { replace: true });
+  const demoLogin = async () => {
+    try {
+      await quickDemoLogin();
+      toast.success("Demo profile loaded successfully.");
+      navigate(location.state?.from || "/dashboard", { replace: true });
+    } catch (error) {
+      setError(error.message || "Unable to load the demo profile. Check the local backend.");
+      toast.error("Demo login failed.");
+    }
   };
 
   return (
@@ -48,7 +57,7 @@ export default function Login() {
         <label className="block text-sm font-medium mt-4">Password
           <input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5" placeholder="Your password" />
         </label>
-        <button type="submit" className="btn-primary w-full mt-5">Sign in</button>
+        <button type="submit" disabled={submitting} className="btn-primary w-full mt-5 disabled:opacity-60">{submitting ? "Signing in…" : "Sign in"}</button>
         <button type="button" onClick={demoLogin} className="btn-ghost w-full mt-3 flex items-center justify-center gap-2"><Sparkles size={16} /> Quick Demo Login</button>
         <button type="button" onClick={demo} className="text-xs text-indigo-600 w-full mt-2">Fill sample SSTC credentials</button>
         <p className="text-sm text-center text-slate-500 mt-5">New student? <Link className="text-indigo-600 font-semibold" to="/register">Create an account</Link></p>

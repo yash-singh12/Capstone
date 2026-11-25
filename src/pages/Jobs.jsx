@@ -1,19 +1,46 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JOBS } from "../data/mockData";
 import JobCard from "../components/JobCard";
 import { useAuth } from "../context/AuthContext";
 import { getGap } from "../data/mockData";
 import HyperlocalMap from "../components/HyperlocalMap";
+import { apiRequest } from "../utils/api";
 
 export default function Jobs() {
   const { user, setPreferredRadius } = useAuth();
   const [radius, setRadius] = useState(user?.preferredRadius || 50);
   const [q, setQ] = useState("");
   const [highlightedId, setHighlightedId] = useState(null);
+  const [serverJobs, setServerJobs] = useState([]);
+  const [jobsError, setJobsError] = useState("");
+  useEffect(() => {
+    let active = true;
+    apiRequest(`/api/jobs?radius=50&student_id=${encodeURIComponent(user?.id || "")}`)
+      .then((result) => {
+        if (!active) return;
+        setServerJobs(result.map((job) => ({
+          ...job,
+          distanceKm: job.distance_km,
+          commuteMin: job.commute_min,
+          busRoute: job.busRoute || job.bus_route,
+        })));
+        setJobsError("");
+      })
+      .catch((error) => {
+        if (active) setJobsError(error.message || "Unable to load additional local job postings.");
+      });
+    return () => { active = false; };
+  }, [user?.id]);
   const skills = user?.skills || [];
-  const filtered = JOBS
+  const knownJobIds = new Set(JOBS.map((job) => job.id));
+  const allJobs = [...JOBS, ...serverJobs.filter((job) => !knownJobIds.has(job.id))];
+  const filtered = allJobs
     .filter(j => j.distanceKm <= radius && (q === "" || (j.title + j.company + j.required.join(" ")).toLowerCase().includes(q.toLowerCase())))
-    .map((job) => ({ ...job, match: getGap(job.id, skills).matchPercent }))
+    .map((job) => {
+      if (knownJobIds.has(job.id)) return { ...job, match: getGap(job.id, skills).matchPercent };
+      const matched = job.required.filter((requiredSkill) => skills.some((skill) => skill.toLowerCase() === requiredSkill.toLowerCase()));
+      return { ...job, match: job.required.length ? Math.round((matched.length / job.required.length) * 100) : 0 };
+    })
     .sort((a, b) => b.match - a.match);
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 grid md:grid-cols-4 gap-4">
@@ -27,6 +54,7 @@ export default function Jobs() {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search React, Java, Raipur…" className="mt-4 w-full border rounded-xl px-3 py-2 text-sm" />
       </div>
       <div className="md:col-span-3">
+        {jobsError && <p role="status" className="mb-3 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-700">{jobsError}</p>}
         <div className="font-bold text-lg mb-2">{filtered.length} jobs within {radius}km of SSTC</div>
         <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200">
           <HyperlocalMap jobs={filtered} radius={radius} highlightedId={highlightedId} />
