@@ -9,6 +9,7 @@ export default function JobDetail() {
   const { user } = useAuth();
   const { id } = useParams();
   const job = JOBS.find(j => j.id === id) || JOBS[0];
+  const application = user?.applications?.find((item) => item.jobId === job.id);
   const gap = getGap(job.id, user?.skills || []);
   const priorityWeight = { High: 0, Medium: 1, Low: 2 };
   const highestPriorityMissing = [...gap.missing].sort((a, b) => (priorityWeight[a.importance] ?? 3) - (priorityWeight[b.importance] ?? 3))[0]?.skill;
@@ -28,7 +29,11 @@ export default function JobDetail() {
         <div className="flex flex-wrap gap-1 mt-1">{job.required.map(s => <span key={s} className="chip bg-slate-100">{s}</span>)}</div>
         <div className="flex gap-2 mt-5 flex-wrap">
           <Link to={`/learn/${learningSkill}`} className="btn-primary text-sm">Start {learningSkill} Upskilling <ArrowRight size={14} className="inline"/></Link>
-          <Link to={`/mock/${job.id}`} className="btn-ghost text-sm">Take Job-Tailored Mock</Link>
+          {application ? (
+            <Link to="/applications" className="btn-ghost text-sm">Application submitted · Track status</Link>
+          ) : (
+            <Link to={`/mock/${job.id}`} className="btn-ghost text-sm">Take Job-Tailored Mock to apply</Link>
+          )}
         </div>
       </div>
       <div className="card p-5">

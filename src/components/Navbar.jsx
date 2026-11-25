@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { MapPin, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
   const { pathname } = useLocation();
@@ -11,6 +12,7 @@ export default function Navbar() {
   const links = [
     ["Dashboard", "/dashboard"],
     ["Jobs", "/jobs"],
+    ["Applications", "/applications"],
     ["Upskilling", "/learn/TypeScript"],
     ["Mock Test", "/mock/pixelkraft-fe"],
   ];
@@ -41,7 +43,10 @@ export default function Navbar() {
             <Link to="/login" className="btn-primary text-sm">Login</Link>
           )}
         </div>
-        <button type="button" onClick={() => setMenuOpen((open) => !open)} className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 md:hidden" aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}>
+        <div className="ml-auto md:ml-0">
+          <NotificationBell />
+        </div>
+        <button type="button" onClick={() => setMenuOpen((open) => !open)} className="ml-0 grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 md:hidden" aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}>
           {menuOpen ? <X size={21} /> : <Menu size={21} />}
         </button>
       </div>

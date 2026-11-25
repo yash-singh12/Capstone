@@ -24,6 +24,7 @@ const HISTORY_DEFAULTS = {
   completedModules: [],
   mockHistory: [],
   applications: [],
+  notifications: [],
   activity: [],
   preferredRadius: 50,
 };
@@ -215,18 +216,59 @@ export function AuthProvider({ children }) {
     setUser(publicUser(merged));
   };
 
-  const addApplication = (jobId, company) => {
+  const addApplication = (jobId, company, jobTitle, readinessScore) => {
+    if (!user) return false;
+    const users = readUsers();
+    const account = users.find((item) => item.id === user.id);
+    if (!account) return false;
+
+    const existingApplications = ensureHistory(account, "applications");
+    if (existingApplications.some((item) => item.jobId === jobId)) return false;
+
+    const now = new Date().toISOString();
+    const mockAttempt = ensureHistory(account, "mockHistory").find((item) => item.jobId === jobId);
+    const score = readinessScore ?? mockAttempt?.percentage ?? null;
+    const application = {
+      jobId,
+      company,
+      jobTitle,
+      appliedAt: now,
+      readinessScore: score,
+      status: "Applied",
+    };
+    const newNotifications = [{
+      id: createId(),
+      message: `Your application for ${jobTitle} at ${company} has been submitted.`,
+      createdAt: now,
+      read: false,
+    }];
+    if (score !== null && score >= 80) {
+      newNotifications.push({
+        id: createId(),
+        message: `Your readiness score qualified you for interview with ${company}.`,
+        createdAt: now,
+        read: false,
+      });
+    }
+
+    const applications = [...existingApplications, application];
+    const notifications = [...newNotifications, ...ensureHistory(account, "notifications")];
+    const activity = [{ id: createId(), message: `Applied to ${company}`, type: "success", createdAt: now }, ...ensureHistory(account, "activity")].slice(0, 10);
+    const merged = { ...account, applications, notifications, activity };
+    localStorage.setItem(USERS_KEY, JSON.stringify(users.map((item) => item.id === merged.id ? merged : item)));
+    setUser(publicUser(merged));
+    return true;
+  };
+
+  const markAllNotificationsRead = () => {
     if (!user) return;
     const users = readUsers();
     const account = users.find((item) => item.id === user.id);
     if (!account) return;
-    if (!ensureHistory(account, "applications").some((item) => item.jobId === jobId)) {
-      const applications = [...ensureHistory(account, "applications"), { jobId, company, appliedAt: new Date().toISOString() }];
-      const activity = [{ id: createId(), message: `Applied to ${company}`, type: "success", createdAt: new Date().toISOString() }, ...ensureHistory(account, "activity")].slice(0, 10);
-      const merged = { ...account, applications, activity };
-      localStorage.setItem(USERS_KEY, JSON.stringify(users.map((item) => item.id === merged.id ? merged : item)));
-      setUser(publicUser(merged));
-    }
+    const notifications = ensureHistory(account, "notifications").map((item) => ({ ...item, read: true }));
+    const merged = { ...account, notifications };
+    localStorage.setItem(USERS_KEY, JSON.stringify(users.map((item) => item.id === merged.id ? merged : item)));
+    setUser(publicUser(merged));
   };
 
   const setPreferredRadius = (radius) => {
@@ -244,7 +286,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const value = { user, register, login, quickDemoLogin, updateUser, logout, addActivity, completeModule, removeModule, completeSkillPath, submitMock, addApplication, setPreferredRadius };
+  const value = { user, register, login, quickDemoLogin, updateUser, logout, addActivity, completeModule, removeModule, completeSkillPath, submitMock, addApplication, markAllNotificationsRead, setPreferredRadius };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

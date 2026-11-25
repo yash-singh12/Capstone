@@ -10,6 +10,7 @@ export default function MockTest() {
   const { jobId } = useParams();
   const mock = MOCK_BY_JOB[jobId] || MOCK_BY_JOB["pixelkraft-fe"];
   const job = JOBS.find((item) => item.id === jobId);
+  const application = user?.applications?.find((item) => item.jobId === (job?.id || jobId));
   const [answers, setAnswers] = useState({});
   const [done, setDone] = useState(false);
   const [behavioral, setBehavioral] = useState("");
@@ -72,17 +73,22 @@ export default function MockTest() {
             {percentage}% — {ready ? "Ready to Apply 🚀" : "Skill Gaps Detected 📚"}
           </p>
           <div className="flex gap-2 justify-center mt-4 flex-wrap">
-            {ready ? (
+            {application ? (
+              <Link to="/applications" className="btn-primary text-sm">Application submitted · Track status</Link>
+            ) : (
               <button
                 className="btn-primary text-sm"
                 onClick={() => {
-                  addApplication(job?.id || jobId, job?.company || "Employer");
-                  toast.success(`Application sent to ${job?.company || "the employer"}.`);
+                  const company = job?.company || "Employer";
+                  const submitted = addApplication(job?.id || jobId, company, job?.title || mock.title, percentage);
+                  if (submitted) toast.success(`Application sent to ${company}.`);
+                  else toast.info("You have already applied for this job.");
                 }}
               >
-                Apply Now
+                Submit Application
               </button>
-            ) : (
+            )}
+            {!ready && (
               <Link to={`/learn/${mock.learning}`} className="btn-primary text-sm">View Recommended Learning</Link>
             )}
             <Link to="/jobs" className="btn-ghost text-sm">Back to Jobs</Link>
